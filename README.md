@@ -32,33 +32,37 @@ minishell/
 │   └── minishell/
 │       └── main.go
 ├── internal/
-│   ├── domain/             # Domain Layer - бизнес-сущности и правила
+│   ├── domain/
 │   │   ├── command.go
-|   |   ├── entities.go
+|   |   ├── execution_context.go
 │   │   ├── pipeline.go
-│   │   └── context.go
-│   ├── application/        # Application Layer - use cases и бизнес-логика
+│   │   └── process.go
+│   ├── application/
 │   │   ├── ports/
-│   │   │   ├── input.go
-│   │   │   └── output.go
+│   │   │   ├── input_ports.go
+│   │   │   └── output_ports.go
 │   │   ├── services/
 │   │   │   ├── shell_service.go
 │   │   │   └── command_service.go
 │   │   └── dtos/
-│   │       └── commands.go
-│   ├── interfaces/         # Interface Adapters Layer
-│   │   ├── controllers/
-│   │   │   └── shell_controller.go
-│   │   ├── repositories/
-│   │   │   └── system_repository.go
-│   │   └── presenters/
-│   │       └── shell_presenter.go
-│   └── infrastructure/     # Infrastructure Layer (Frameworks & Drivers)
-│       ├── parser/
-│       │   └── command_parser.go
-│       ├── executors/
-│       │   └── command_executor.go
-│       └── system/
-│           └── os_operations.go
+│   │       ├── command_dtos.go
+│   │       └── shell_dtos.go
+│   └── infrastructure/
+│       ├── adapters/
+│       │   ├── input_adapters/
+│       │   │   └── shell_controller.go
+│       │   ├── output_adapters/
+│       │   │   ├── command_executor_adapter.go
+│       │   │   └── system_repository_adapter.go
+│       │   ├── parser_adapters/
+│       │   │   └── command_parser_adapter.go
+│       │   └── presenters/
+│       │       └── shell_presenter_adapter.go
+│       └── frameworks/
+├── pkg/
+│   ├── utils/
+│   │   └── string_utils.go
+│   └── constants/
+│       └── shell_constants.go
 └── go.mod
 ```

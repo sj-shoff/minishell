@@ -1,5 +1,13 @@
 package domain
 
+// ExecutionContext - доменная сущность контекста выполнения
+type ExecutionContext struct {
+	CurrentDir   string
+	Environment  map[string]string
+	LastExitCode int
+	IsRunning    bool
+}
+
 // NewExecutionContext создает новый контекст выполнения
 func NewExecutionContext() *ExecutionContext {
 	return &ExecutionContext{

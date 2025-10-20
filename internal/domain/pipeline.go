@@ -1,5 +1,11 @@
 package domain
 
+// Pipeline - доменная сущность пайплайна команд
+type Pipeline struct {
+	Commands []*Command
+	Operator string
+}
+
 // NewPipeline создает новый пайплайн
 func NewPipeline() *Pipeline {
 	return &Pipeline{

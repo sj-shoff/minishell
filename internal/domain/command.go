@@ -1,5 +1,15 @@
 package domain
 
+// Command - доменная сущность команды
+type Command struct {
+	Name       string
+	Args       []string
+	Input      string
+	Output     string
+	Append     bool
+	Background bool
+}
+
 // NewCommand создает новую команду
 func NewCommand(name string) *Command {
 	return &Command{
