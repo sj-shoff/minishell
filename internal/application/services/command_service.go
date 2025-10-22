@@ -49,22 +49,20 @@ func (s *CommandService) ExecuteSingleCommand(cmd *domain.Command, ctx *domain.E
 }
 
 // executePipeSequence выполняет последовательность команд с пайпами
+// executePipeSequence выполняет последовательность команд с пайпами
 func (s *CommandService) executePipeSequence(commands []*domain.Command, ctx *domain.ExecutionContext) error {
 	var input []byte
 	var lastExitCode int
 
-	for i, cmd := range commands {
+	for _, cmd := range commands {
 		output, exitcode, err := s.system.ExecuteCommand(cmd, input)
 		if err != nil {
 			ctx.UpdateExitCode(1)
+			return err
 		}
 
 		input = output
 		lastExitCode = exitcode
-
-		if i == len(commands)-1 && len(output) > 0 {
-			fmt.Print(string(output))
-		}
 	}
 
 	ctx.UpdateExitCode(lastExitCode)
@@ -139,6 +137,9 @@ func (s *CommandService) executeEcho(cmd *domain.Command, ctx *domain.ExecutionC
 	}
 
 	fmt.Print(output.String())
+	if len(cmd.Args) > 0 {
+		fmt.Println()
+	}
 	ctx.UpdateExitCode(0)
 	return nil
 }

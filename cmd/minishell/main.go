@@ -2,7 +2,6 @@ package main
 
 import (
 	"minishell/internal/application/services"
-	"minishell/internal/domain"
 	input_adapters "minishell/internal/infrastructure/adapters/input_adapters"
 	output_adapters "minishell/internal/infrastructure/adapters/output_adapters"
 	parser_adapters "minishell/internal/infrastructure/adapters/parser_adapters"
@@ -26,7 +25,7 @@ func main() {
 	)
 
 	// Инициализация контроллера
-	shellController := input_adapters.NewShellController(shellService, systemRepo, domain.NewExecutionContext())
+	shellController := input_adapters.NewShellController(shellService, systemRepo)
 
 	// Запуск приложения
 	shellController.Run()
