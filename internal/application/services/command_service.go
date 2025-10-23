@@ -23,25 +23,35 @@ func NewCommandService(system ports.SystemRepositoryOutputPort) *CommandService 
 // ExecutePipeline выполняет пайплайн команд
 func (s *CommandService) ExecutePipeline(pipeline *domain.Pipeline, ctx *domain.ExecutionContext) error {
 	if pipeline.IsSingleCommand() {
-		s.ExecuteSingleCommand(pipeline.Commands[0], ctx)
+		return s.ExecuteSingleCommand(pipeline.Commands[0], ctx)
 	}
 	return s.executePipeSequence(pipeline.Commands, ctx)
 }
 
 // ExecuteSingleCommand выполняет одиночную команду
 func (s *CommandService) ExecuteSingleCommand(cmd *domain.Command, ctx *domain.ExecutionContext) error {
+	if cmd == nil {
+		ctx.UpdateExitCode(1)
+		return fmt.Errorf("nil command")
+	}
+
 	if cmd.IsBuiltin() {
 		return s.executeBuiltinCommand(cmd, ctx)
 	}
 
 	output, exitCode, err := s.system.ExecuteCommand(cmd, nil)
 	if err != nil {
-		return err
+		ctx.UpdateExitCode(exitCode)
+		// Возвращаем ошибку только если это не "нормальная" ошибка выполнения
+		if exitCode != 0 {
+			return err
+		}
 	}
 
 	ctx.UpdateExitCode(exitCode)
 
-	if len(output) > 0 {
+	// Выводим результат только если нет редиректа вывода
+	if cmd.Output == "" && len(output) > 0 {
 		fmt.Print(string(output))
 	}
 
@@ -49,12 +59,16 @@ func (s *CommandService) ExecuteSingleCommand(cmd *domain.Command, ctx *domain.E
 }
 
 // executePipeSequence выполняет последовательность команд с пайпами
-// executePipeSequence выполняет последовательность команд с пайпами
 func (s *CommandService) executePipeSequence(commands []*domain.Command, ctx *domain.ExecutionContext) error {
 	var input []byte
 	var lastExitCode int
 
-	for _, cmd := range commands {
+	for i, cmd := range commands {
+		if cmd == nil {
+			ctx.UpdateExitCode(1)
+			return fmt.Errorf("nil command in pipeline")
+		}
+
 		output, exitcode, err := s.system.ExecuteCommand(cmd, input)
 		if err != nil {
 			ctx.UpdateExitCode(1)
@@ -63,6 +77,11 @@ func (s *CommandService) executePipeSequence(commands []*domain.Command, ctx *do
 
 		input = output
 		lastExitCode = exitcode
+
+		// Выводим результат только для последней команды в пайплайне и если нет редиректа
+		if i == len(commands)-1 && cmd.Output == "" && len(output) > 0 {
+			fmt.Print(string(output))
+		}
 	}
 
 	ctx.UpdateExitCode(lastExitCode)
@@ -71,6 +90,23 @@ func (s *CommandService) executePipeSequence(commands []*domain.Command, ctx *do
 
 // executeBuiltinCommand выполняет встроенную команду
 func (s *CommandService) executeBuiltinCommand(cmd *domain.Command, ctx *domain.ExecutionContext) error {
+	// Для встроенных команд с редиректом вывода используем системный адаптер
+	if cmd.Output != "" || cmd.Input != "" {
+		output, exitCode, err := s.system.ExecuteCommand(cmd, nil)
+		if err != nil {
+			ctx.UpdateExitCode(exitCode)
+			return err
+		}
+		ctx.UpdateExitCode(exitCode)
+
+		// Выводим результат только если нет редиректа вывода
+		if cmd.Output == "" && len(output) > 0 {
+			fmt.Print(string(output))
+		}
+		return nil
+	}
+
+	// Обычное выполнение встроенных команд без редиректов
 	switch cmd.Name {
 	case "cd":
 		return s.executeCD(cmd, ctx)
@@ -121,7 +157,7 @@ func (s *CommandService) executePWD(ctx *domain.ExecutionContext) error {
 		return err
 	}
 
-	fmt.Print(dir)
+	fmt.Println(dir)
 	ctx.UpdateExitCode(0)
 	return nil
 }
@@ -136,10 +172,7 @@ func (s *CommandService) executeEcho(cmd *domain.Command, ctx *domain.ExecutionC
 		output.WriteString(arg)
 	}
 
-	fmt.Print(output.String())
-	if len(cmd.Args) > 0 {
-		fmt.Println()
-	}
+	fmt.Println(output.String())
 	ctx.UpdateExitCode(0)
 	return nil
 }

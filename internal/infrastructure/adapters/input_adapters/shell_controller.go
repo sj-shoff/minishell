@@ -80,6 +80,7 @@ func (c *ShellController) setupSignalHandling() {
 			switch sig {
 			case syscall.SIGINT:
 				fmt.Println("\nInterrupted")
+				fmt.Print(c.shellService.GetPrompt(c.context))
 			case syscall.SIGTERM:
 				c.shellService.ExecuteCommand("exit", c.context)
 			}

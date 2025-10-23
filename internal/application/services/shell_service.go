@@ -37,23 +37,33 @@ func (s *ShellService) ExecuteCommand(input string, ctx *domain.ExecutionContext
 
 	pipelines, err := s.parser.Parse(input, ctx.Environment)
 	if err != nil {
-		s.presenter.ShowError("Parse error: " + err.Error())
+		s.presenter.ShowError("parse error: " + err.Error())
 		ctx.UpdateExitCode(1)
 		return err
 	}
 
-	for _, pipeline := range pipelines {
-		if !pipeline.ShouldContinueExecution(ctx.LastExitCode) {
-			continue
+	// Сохраняем исходный exit code для правильной работы логических операторов
+	originalExitCode := ctx.LastExitCode
+
+	for i, pipeline := range pipelines {
+		// Для первого пайплайна всегда выполняем, для остальных - проверяем оператор
+		if i > 0 {
+			if !pipeline.ShouldContinueExecution(originalExitCode) {
+				// Пропускаем выполнение этого пайплайна
+				continue
+			}
 		}
 
-		err := s.executor.ExecutePipeline(pipeline, ctx)
-		if err != nil {
-			s.presenter.ShowError("Execution error: " + err.Error())
-			break
+		if err := s.executor.ExecutePipeline(pipeline, ctx); err != nil {
+			s.presenter.ShowError("execution error: " + err.Error())
+			ctx.UpdateExitCode(1)
 		}
+
+		// Обновляем originalExitCode после каждого выполненного пайплайна
+		originalExitCode = ctx.LastExitCode
 	}
 
+	// Обновляем текущую директорию после выполнения команд
 	if dir, err := s.system.GetCurrentDirectory(); err == nil {
 		ctx.UpdateCurrentDir(dir)
 	}

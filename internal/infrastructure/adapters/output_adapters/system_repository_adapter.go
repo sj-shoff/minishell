@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"minishell/internal/domain"
-	"minishell/pkg/utils"
 	"os"
 	"os/exec"
 	"strconv"
@@ -23,11 +22,23 @@ func NewSystemRepositoryAdapter() *SystemRepositoryAdapter {
 
 // ExecuteCommand выполняет внешнюю команду
 func (r *SystemRepositoryAdapter) ExecuteCommand(cmd *domain.Command, input []byte) ([]byte, int, error) {
+	// Проверяем, существует ли команда
+	if cmd.Name == "" {
+		return nil, 127, fmt.Errorf("command not found")
+	}
+
+	// Проверяем, доступна ли команда в системе
+	if _, err := exec.LookPath(cmd.Name); err != nil {
+		return nil, 127, fmt.Errorf("command not found: %s", cmd.Name)
+	}
+
 	execCmd := exec.Command(cmd.Name, cmd.Args...)
 
 	var stdin io.Reader
-	var stdout, stderr bytes.Buffer
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
 
+	// Настройка ввода
 	if input != nil {
 		stdin = bytes.NewReader(input)
 	} else if cmd.Input != "" {
@@ -42,11 +53,12 @@ func (r *SystemRepositoryAdapter) ExecuteCommand(cmd *domain.Command, input []by
 	}
 
 	execCmd.Stdin = stdin
+
+	// Настройка вывода - по умолчанию в буфер
 	execCmd.Stdout = &stdout
 	execCmd.Stderr = &stderr
 
-	execCmd.Env = r.getEnvironment()
-
+	// Обработка редиректа вывода
 	if cmd.Output != "" {
 		flags := os.O_CREATE | os.O_WRONLY
 		if cmd.Append {
@@ -61,8 +73,13 @@ func (r *SystemRepositoryAdapter) ExecuteCommand(cmd *domain.Command, input []by
 		}
 		defer outputFile.Close()
 
+		// Перенаправляем вывод в файл
 		execCmd.Stdout = outputFile
+		// Для редиректа вывода не возвращаем данные в stdout
+		stdout.Reset()
 	}
+
+	execCmd.Env = os.Environ()
 
 	var exitCode int
 	err := execCmd.Run()
@@ -70,13 +87,15 @@ func (r *SystemRepositoryAdapter) ExecuteCommand(cmd *domain.Command, input []by
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		} else {
-			exitCode = 1
+			// Если команда не найдена, возвращаем код 127
+			exitCode = 127
 		}
 	} else {
 		exitCode = 0
 	}
 
-	if stderr.Len() > 0 {
+	// Выводим stderr только если нет редиректа вывода
+	if stderr.Len() > 0 && cmd.Output == "" {
 		fmt.Fprint(os.Stderr, stderr.String())
 	}
 
@@ -97,17 +116,12 @@ func (r *SystemRepositoryAdapter) GetCurrentDirectory() (string, error) {
 func (r *SystemRepositoryAdapter) GetEnvironment() map[string]string {
 	env := make(map[string]string)
 	for _, pair := range os.Environ() {
-		parts := utils.SplitEnvVar(pair)
+		parts := strings.SplitN(pair, "=", 2)
 		if len(parts) == 2 {
 			env[parts[0]] = parts[1]
 		}
 	}
 	return env
-}
-
-// getEnvironment возвращает окружение в формате для exec
-func (r *SystemRepositoryAdapter) getEnvironment() []string {
-	return os.Environ()
 }
 
 // KillProcess убивает процесс по PID
@@ -123,24 +137,29 @@ func (r *SystemRepositoryAdapter) KillProcess(pid int) error {
 func (r *SystemRepositoryAdapter) GetProcessList() ([]domain.ProcessInfo, error) {
 	var processes []domain.ProcessInfo
 
-	entries, err := os.ReadDir("/proc")
+	// Используем системную команду ps для получения списка процессов
+	cmd := exec.Command("ps", "aux")
+	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
 
-	for _, entry := range entries {
-		if pid, err := strconv.Atoi(entry.Name()); err == nil {
-			cmdlinePath := fmt.Sprintf("/proc/%d/cmdline", pid)
-			if cmdline, err := os.ReadFile(cmdlinePath); err == nil {
-				cmdStr := strings.ReplaceAll(string(cmdline), "\x00", " ")
-				cmdStr = strings.TrimSpace(cmdStr)
-				if cmdStr != "" {
-					processes = append(processes, domain.ProcessInfo{
-						PID: pid,
-						Cmd: cmdStr,
-					})
-				}
-			}
+	lines := strings.Split(string(output), "\n")
+	for i, line := range lines {
+		if i == 0 || line == "" { // Пропускаем заголовок и пустые строки
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+
+		if pid, err := strconv.Atoi(fields[1]); err == nil {
+			processes = append(processes, domain.ProcessInfo{
+				PID: pid,
+				Cmd: strings.Join(fields[10:], " "),
+			})
 		}
 	}
 

@@ -17,7 +17,7 @@ func NewCommandParserAdapter() *CommandParserAdapter {
 
 // Parse разбирает строку команды на пайплайны
 func (p *CommandParserAdapter) Parse(input string, env map[string]string) ([]*domain.Pipeline, error) {
-	input = utils.TrimSpace(input)
+	input = strings.TrimSpace(input)
 	if input == "" {
 		return nil, nil
 	}
@@ -26,12 +26,23 @@ func (p *CommandParserAdapter) Parse(input string, env map[string]string) ([]*do
 
 	parts := p.splitByLogicalOperators(input)
 
-	for i := 0; i < len(parts); i += 2 {
-		pipelineStr := parts[i]
-		var operator string
-		if i+1 < len(parts) {
-			operator = parts[i+1]
+	// Первый пайплайн всегда выполняется
+	if len(parts) > 0 {
+		pipeline, err := p.parsePipeline(parts[0], env)
+		if err != nil {
+			return nil, err
 		}
+		pipelines = append(pipelines, pipeline)
+	}
+
+	// Обрабатываем остальные пайплайны с операторами
+	for i := 1; i < len(parts); i += 2 {
+		if i+1 >= len(parts) {
+			return nil, &ParseError{"missing command after operator"}
+		}
+
+		operator := parts[i]
+		pipelineStr := parts[i+1]
 
 		pipeline, err := p.parsePipeline(pipelineStr, env)
 		if err != nil {
@@ -131,15 +142,18 @@ func (p *CommandParserAdapter) parseCommand(cmdStr string, env map[string]string
 			case "<":
 				cmd.SetInput(filename)
 			}
-			i++
+			i += 2   // Пропускаем и оператор и имя файла
+			continue // Не добавляем оператор как аргумент
 
 		case "&":
 			cmd.Background = true
+			i++
+			continue
 
 		default:
 			cmd.AddArg(token)
+			i++
 		}
-		i++
 	}
 
 	return cmd, nil

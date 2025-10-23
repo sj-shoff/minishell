@@ -16,10 +16,9 @@ func main() {
 
 	// Инициализация сервисов
 	commandService := services.NewCommandService(systemRepo)
-	commandExecutor := output_adapters.NewCommandExecutorAdapter(commandService)
 	shellService := services.NewShellService(
 		commandParser,
-		commandExecutor,
+		commandService,
 		systemRepo,
 		shellPresenter,
 	)
